@@ -131,9 +131,6 @@ MTML
     my $rebuild_all = $app->param( 'rebuild_all' );
     if ( $rebuild_all ) {
         $param->{ rebuild_all } = $rebuild_all;
-        my $email = $app->user->email;
-        require MT::Session;
-        my $sess = MT::Session->get_by_key( { id => $rebuild_all, email => $email, kind => 'RB' } );
         my $rebuild_blogs = $sess->data;
         if ( $rebuild_blogs ) {
             my $blog_id = $app->param( 'blog_id' );
@@ -150,9 +147,14 @@ MTML
                 $param->{ next } = $next;
             }
         } else {
-            my $rebuild_time = time - $sess->start;
-            $param->{ rebuild_time } = $rebuild_time;
-            $sess->remove or die $sess->errstr;
+            my $email = $app->user->email;
+            require MT::Session;
+            my $sess = MT::Session->load( { id => $rebuild_all, email => $email, kind => 'RB' } );
+            if ( $sess ) {
+                my $rebuild_time = time - $sess->start;
+                $param->{ rebuild_time } = $rebuild_time;
+                $sess->remove or die $sess->errstr;
+            }
         }
     }
 }
