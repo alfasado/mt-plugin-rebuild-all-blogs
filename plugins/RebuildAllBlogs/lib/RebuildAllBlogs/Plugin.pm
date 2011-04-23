@@ -1,7 +1,6 @@
 package RebuildAllBlogs::Plugin;
 
 use strict;
-use RebuildAllBlogs::Util qw( str2array );
 
 sub _rebuild_confirm {
     my ( $cb, $app, $param, $tmpl ) = @_;
@@ -10,7 +9,7 @@ sub _rebuild_confirm {
     my $nodeset = $tmpl->createElement( 'app:setting', { id => 'rebuild_all', label => $plugin->translate( 'Rebuild All' ) , show_label => 0 } );
     my $innerHTML = <<MTML;
 <__trans_section component="RebuildAllBlogs">
-<p style="margin-bottom:0.7em">
+<p style="margin-top:1em">
     <label id="rebuild_all-wrapper"><input onchange="select_all( this );" type="checkbox" id="rebuild_all" name="rebuild_all" value="<mt:var name="rebuild_all">" <mt:if name="rebuild_next">checked="checked"</mt:if> /> <__trans phrase="Rebuild All"></label>
 </p>
 <mt:unless name="rebuild_next">
@@ -22,23 +21,33 @@ function select_all( cb ) {
         getByID( 'type' ).selectedIndex = 0;
     }
 }
-<mt:if name="rebuild_all">
-getByID( 'type' ).selectedIndex = 0;
+<mt:if name="rebuild_all">getByID( 'type' ).selectedIndex = 0;
 </mt:if>
 </script>
-<mt:if name="rebuild_next">
-<script type="text/javascript">
-    document.getElementById( 'rebuild' ).submit();
+<mt:if name="rebuild_next"><script type="text/javascript">
+    getByID( 'rebuild' ).submit();
 </script>
 </mt:if>
 </__trans_section>
 MTML
-    $nodeset->innerHTML( $innerHTML );
-    $tmpl->insertAfter( $nodeset, $pointer_field );
+    my $inner = $pointer_field->innerHTML;
+    $inner =~ s/<select/<select id="type"/;
+    $pointer_field->innerHTML( $inner . $innerHTML );
     my $rebuild_all = $app->param( 'rebuild_all' );
     $param->{ rebuild_next } = $rebuild_all;
     $rebuild_all = $app->make_magic_token unless $rebuild_all;
     $param->{ rebuild_all } = $rebuild_all;
+}
+
+sub _confirm_header {
+    my ( $cb, $app, $tmpl ) = @_;
+    if ( $app->mode ne 'rebuild_confirm' ) {
+        return 1;
+    }
+    if ( $app->param( 'rebuild_all' ) ) {
+        my $css = '<style type="text/css">body{display:none}</style>';
+        $$tmpl =~ s!(</head>)!$css$1!;
+    }
 }
 
 sub _confirm_source {
@@ -50,7 +59,6 @@ sub _confirm_source {
 
 sub _rebuilding_source {
     my ( $cb, $app, $tmpl ) = @_;
-    '__mode=rebuild';
     my $new = '<mt:if name="rebuild_blogs">&rebuild_blogs=<$mt:var name="rebuild_blogs" escape="url"$></mt:if><mt:if name="rebuild_all">&rebuild_all=<$mt:var name="rebuild_all" escape="url"$></mt:if>';
     $$tmpl =~ s/(__mode=rebuild)/$1$new/;
 }
@@ -67,7 +75,7 @@ sub _rebuilding {
             @blog_ids = __rebuild_blogs( $app );
         } else {
             my $data = $sess->data;
-            @blog_ids = str2array( $data ) if $data;
+            @blog_ids = split( /,/, $data ) if $data;
         }
         my @new_ids;
         for my $id ( @blog_ids ) {
@@ -105,18 +113,6 @@ sub __rebuild_blogs {
 sub _rebuilt {
     my ( $cb, $app, $param, $tmpl ) = @_;
     my $pointer_field = $tmpl->getElementById( 'message' );
-    my $nodeset = $tmpl->createElement( 'for' );
-    my $innerHTML = <<MTML;
-<mt:if name="rebuild_all">
-<mt:if name="next">
-<script type="text/javascript">
-window.location='<mt:var name="script_url">?__mode=rebuild_confirm&blog_id=<mt:var name="next">&rebuild_all=<mt:var name="rebuild_all">';
-</script>
-</mt:if>
-</mt:if>
-MTML
-    $nodeset->innerHTML( $innerHTML );
-    $tmpl->insertBefore( $nodeset, $pointer_field );
     my $insertHTML = <<MTML;
     <__trans_section component="RebuildAllBlogs">
     <mt:if name="rebuild_time">
@@ -129,12 +125,17 @@ MTML
     $block =~ s/$pointer/$insertHTML$1/;
     $pointer_field->innerHTML( $block );
     my $rebuild_all = $app->param( 'rebuild_all' );
+    my $next;
     if ( $rebuild_all ) {
         $param->{ rebuild_all } = $rebuild_all;
-        my $rebuild_blogs = $sess->data;
-        if ( $rebuild_blogs ) {
+        my $email = $app->user->email;
+        require MT::Session;
+        my $sess = MT::Session->load( { id => $rebuild_all, email => $email, kind => 'RB' } );
+        my $rebuild_blogs;
+        if ( $sess && $sess->data ) {
+            $rebuild_blogs = $sess->data;
             my $blog_id = $app->param( 'blog_id' );
-            my @blogs = str2array( $rebuild_blogs );
+            my @blogs = split( /,/, $rebuild_blogs );
             my @new_ids;
             for my $id ( @blogs ) {
                 if ( ( $id ) && ( $id != $blog_id ) ) {
@@ -143,19 +144,22 @@ MTML
             }
             if ( scalar @new_ids ) {
                 $rebuild_blogs = join ( ',', @new_ids );
-                my $next = $new_ids[ 0 ];
+                $next = $new_ids[ 0 ];
                 $param->{ next } = $next;
             }
         } else {
-            my $email = $app->user->email;
-            require MT::Session;
-            my $sess = MT::Session->load( { id => $rebuild_all, email => $email, kind => 'RB' } );
             if ( $sess ) {
                 my $rebuild_time = time - $sess->start;
                 $param->{ rebuild_time } = $rebuild_time;
                 $sess->remove or die $sess->errstr;
             }
         }
+    }
+    if ( $rebuild_all && $next ) {
+        my $url = $app->base . $app->uri( mode => 'rebuild_confirm',
+                                args => { blog_id => $next,
+                                          rebuild_all => $rebuild_all, } );
+        return $app->redirect( $url );
     }
 }
 

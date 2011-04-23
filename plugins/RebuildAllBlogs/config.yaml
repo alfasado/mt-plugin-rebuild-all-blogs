@@ -12,3 +12,4 @@ callbacks:
     MT::App::CMS::template_param.rebuilt: $rebuildallblogs::RebuildAllBlogs::Plugin::_rebuilt
     MT::App::CMS::template_param.rebuild_confirm: $rebuildallblogs::RebuildAllBlogs::Plugin::_rebuild_confirm
     MT::App::CMS::template_source.rebuild_confirm: $rebuildallblogs::RebuildAllBlogs::Plugin::_confirm_source
+    MT::App::CMS::template_source.chromeless_header: $rebuildallblogs::RebuildAllBlogs::Plugin::_confirm_header
