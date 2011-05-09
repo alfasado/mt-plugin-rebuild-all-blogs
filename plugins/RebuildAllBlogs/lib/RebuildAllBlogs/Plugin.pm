@@ -118,11 +118,11 @@ sub _rebuilt {
     <mt:if name="rebuild_time">
     (<__trans phrase="Total publish time: [_1]." params="<mt:var name="rebuild_time">">)
     </mt:if>
-    </__trans_section>
+    </__trans_section><mt:if name="start_timestamp">
 MTML
     my $block = $pointer_field->innerHTML;
     my $pointer = quotemeta( '<mt:if name="start_timestamp">' );
-    $block =~ s/$pointer/$insertHTML$1/;
+    $block =~ s/$pointer/$insertHTML/;
     $pointer_field->innerHTML( $block );
     my $rebuild_all = $app->param( 'rebuild_all' );
     my $next;
